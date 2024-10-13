@@ -6,7 +6,7 @@ ifeq (${DEBUG}, YES)
 DEBUG_FLAGS = -DDEBUG_PRINT_ADDR
 endif
 
-O_SRC = chunk.o
+O_SRC = chunk.o arena.o
 
 %.o: %.c %.h
 	${CC} ${CFLAGS} ${DEBUG_FLAGS} -o $@ -c $<
