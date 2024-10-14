@@ -21,10 +21,19 @@
 #include "arena.h"
 #include "chunk.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdarg.h>
 #include <sys/mman.h>
 
+[[ noreturn ]] void err_die(const char *fmt, ...) {
+	va_list arg;
+	va_start(arg, fmt);
+	vfprintf(stderr, fmt, arg);
+	va_end(arg);
+	exit(EXIT_FAILURE);
+}
 heaparena_e heaparena_init(heaparena_t *arena) {
 	void *ptr = mmap(
 		NULL, PAGESIZE,
@@ -51,7 +60,41 @@ heaparena_e heaparena_init(heaparena_t *arena) {
 	return HEAPARENA_OK;
 }
 
+void *heaparena_alloc(heaparena_t *arena, size_t size) {
+	size += -size & (PTRALIGN - 1);
+	struct heapchunk_t *prev , *chunk, *next;
+	chunk = arena->start;
+	prev = next = NULL;
+	while (chunk != NULL && size > chunk->size) {
+		prev = chunk;
+		chunk = chunk->next_free;
+	}
+	if (chunk == NULL) {
+		err_die("reached end of list with no valid chunk\n");
+	}
+
+	assert(heapchunk_partition(chunk, size, &next));
+
+	if (prev) {
+		prev->next_free = next;
+	} else {
+		arena->start = next;
+	}
+	arena->avalible -= size + sizeof(struct heapchunk_t);
+	return (void*)get_chunk_ptr(chunk);
+}
 int main() {
 	heaparena_t arena;
 	assert(heaparena_init(&arena));
+
+	char *buffer = heaparena_alloc(&arena, 32);
+	assert(buffer != NULL);
+	struct heapchunk_t *chunk = get_chunk_tag(buffer);
+	assert(chunk->size == 32);
+	assert(chunk->meta.next_in_mem == arena.start);
+	assert(chunk->meta.prev_in_mem == NULL);
+	assert(arena.start->meta.prev_in_mem == chunk);
+	assert(arena.start->meta.next_in_mem == NULL);
+	assert(chunk->next_free == NULL);
+	assert(arena.avalible == (PAGESIZE - 32 - (sizeof(struct heapchunk_t) * 2)));
 }

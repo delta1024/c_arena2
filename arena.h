@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #define PAGESIZE sysconf(_SC_PAGESIZE)
+#define PTRALIGN 16
 
 typedef struct heaparena_t {
 	struct heapchunk_t *start;
