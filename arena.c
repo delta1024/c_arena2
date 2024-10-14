@@ -20,6 +20,7 @@
  */
 #include "arena.h"
 #include "chunk.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,13 +84,27 @@ void *heaparena_alloc(heaparena_t *arena, size_t size) {
 	arena->avalible -= size + sizeof(struct heapchunk_t);
 	return (void*)get_chunk_ptr(chunk);
 }
+
+void heaparena_free(heaparena_t *arena, void *ptr) {
+	struct heapchunk_t *chunk, *oldhead;
+	oldhead = arena->start;
+	chunk = get_chunk_tag(ptr);
+
+	arena->start = chunk;
+	chunk->next_free = oldhead;
+	chunk->isactive = false;
+	arena->avalible += chunk->size;
+}
 int main() {
 	heaparena_t arena;
 	assert(heaparena_init(&arena));
 
 	char *buffer = heaparena_alloc(&arena, 32);
 	assert(buffer != NULL);
+	uint32_t chunk_size, old_avail;
+	old_avail = arena.avalible;
 	struct heapchunk_t *chunk = get_chunk_tag(buffer);
+	chunk_size = chunk->size;
 	assert(chunk->size == 32);
 	assert(chunk->meta.next_in_mem == arena.start);
 	assert(chunk->meta.prev_in_mem == NULL);
@@ -97,4 +112,10 @@ int main() {
 	assert(arena.start->meta.next_in_mem == NULL);
 	assert(chunk->next_free == NULL);
 	assert(arena.avalible == (PAGESIZE - 32 - (sizeof(struct heapchunk_t) * 2)));
+	heaparena_free(&arena, buffer);
+	assert(arena.avalible == old_avail + chunk_size);
+	buffer = heaparena_alloc(&arena, 16);
+	struct heapchunk_t *chunk2 = get_chunk_tag(buffer);
+	assert(chunk == chunk2);
+
 }
