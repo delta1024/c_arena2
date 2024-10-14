@@ -75,7 +75,6 @@ void *heaparena_alloc(heaparena_t *arena, size_t size) {
 	}
 
 	assert(heapchunk_partition(chunk, size, &next));
-
 	if (prev) {
 		prev->next_free = next;
 	} else {
@@ -86,14 +85,19 @@ void *heaparena_alloc(heaparena_t *arena, size_t size) {
 }
 
 void heaparena_free(heaparena_t *arena, void *ptr) {
-	struct heapchunk_t *chunk, *oldhead;
-	oldhead = arena->start;
+	struct heapchunk_t *chunk, *oldhead, *prev;
 	chunk = get_chunk_tag(ptr);
-
-	arena->start = chunk;
-	chunk->next_free = oldhead;
-	chunk->isactive = false;
-	arena->avalible += chunk->size;
+	prev = chunk->meta.prev_in_mem;
+	if (prev && !prev->isactive) {
+		assert(heapchunk_mergenext(prev));
+		arena->avalible += chunk->size + sizeof(struct heapchunk_t);
+	} else {
+		oldhead = arena->start;
+		arena->start = chunk;
+		chunk->next_free = oldhead;
+		chunk->isactive = false;
+		arena->avalible += chunk->size;
+	}
 }
 int main() {
 	heaparena_t arena;
@@ -113,9 +117,18 @@ int main() {
 	assert(chunk->next_free == NULL);
 	assert(arena.avalible == (PAGESIZE - 32 - (sizeof(struct heapchunk_t) * 2)));
 	heaparena_free(&arena, buffer);
+	printf("%lu\n", (unsigned long)arena.start->size);
 	assert(arena.avalible == old_avail + chunk_size);
 	buffer = heaparena_alloc(&arena, 16);
+	printf("%lu\n", (unsigned long)arena.start->next_free->size);
 	struct heapchunk_t *chunk2 = get_chunk_tag(buffer);
 	assert(chunk == chunk2);
+	char *buff2 = heaparena_alloc(&arena, 32);
+	printf("%lu\n", (unsigned long)arena.start->next_free->size);
+	heaparena_free(&arena, buffer);
+	heaparena_free(&arena, buff2);
+	assert(arena.start->size == 16 + 32 + sizeof(struct heapchunk_t));
+
+	buffer = heaparena_alloc(&arena, 150);
 
 }
