@@ -56,3 +56,13 @@ heapchunk_e heapchunk_partition(struct heapchunk_t *block, uint32_t partsize,
 	// all good
 	return HEAPCHUNK_OK;
 }
+heapchunk_e heapchunk_mergenext(struct heapchunk_t *previous) {
+	struct heapchunk_t *next = previous->meta.next_in_mem;
+	if (!next) {
+		return HEAPCHUNK_ERR;
+	}
+	previous->meta.next_in_mem = next->meta.next_in_mem;
+	next->meta.next_in_mem->meta.prev_in_mem = previous;
+	previous->size += next->size + sizeof(struct heapchunk_t);
+	return HEAPCHUNK_OK;
+}
